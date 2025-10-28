@@ -65,20 +65,23 @@ fi
 read -p "應用程式連接埠 [3000]: " APP_PORT
 APP_PORT=${APP_PORT:-3000}
 
+# APT 以 IPv4 強制連線，避免 IPv6 網路不可達
+APT="apt-get -o Acquire::ForceIPv4=true"
+
 # 更新系統
-log_info "更新系統套件..."
-apt-get update
-apt-get upgrade -y
+log_info "更新系統套件 (IPv4 模式)..."
+$APT update
+$APT upgrade -y
 
 # 安裝必要套件
 log_info "安裝必要套件..."
-apt-get install -y curl wget git build-essential
+$APT install -y curl wget git build-essential unzip
 
 # 安裝 Node.js 18.x
 log_info "安裝 Node.js 18.x..."
 if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-    apt-get install -y nodejs
+    curl -4 -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    $APT install -y nodejs
 fi
 
 log_info "Node.js 版本: $(node -v)"
@@ -87,7 +90,7 @@ log_info "npm 版本: $(npm -v)"
 # 安裝 PostgreSQL
 log_info "安裝 PostgreSQL..."
 if ! command -v psql &> /dev/null; then
-    apt-get install -y postgresql postgresql-contrib
+    $APT install -y postgresql postgresql-contrib
     systemctl start postgresql
     systemctl enable postgresql
 fi
@@ -97,7 +100,7 @@ log_info "PostgreSQL 版本: $(psql --version)"
 # 安裝 Nginx
 log_info "安裝 Nginx..."
 if ! command -v nginx &> /dev/null; then
-    apt-get install -y nginx
+    $APT install -y nginx
     systemctl start nginx
     systemctl enable nginx
 fi
@@ -113,9 +116,21 @@ cd $INSTALL_DIR
 if [ -d "/tmp/chemistry-app" ]; then
     log_info "從本地複製檔案..."
     cp -r /tmp/chemistry-app/* $INSTALL_DIR/
+elif [ -f "/tmp/chemistry-app.zip" ]; then
+    log_info "從本地壓縮檔解壓..."
+    unzip -o /tmp/chemistry-app.zip -d /tmp/chemistry-app-unzip
+    # 若 zip 內層有目錄，嘗試抓第一層目錄內容
+    if [ -d "/tmp/chemistry-app-unzip/Chemical-HTML-main" ]; then
+        cp -r /tmp/chemistry-app-unzip/Chemical-HTML-main/* $INSTALL_DIR/
+    else
+        cp -r /tmp/chemistry-app-unzip/* $INSTALL_DIR/
+    fi
 else
     log_info "從 GitHub 下載專案..."
-    git clone https://github.com/Ceramic5612/Chemical-HTML.git .
+    git clone https://github.com/Ceramic5612/Chemical-HTML.git . || {
+        log_warn "GitHub 下載失敗，請改用本地來源：將專案上傳到 /tmp/chemistry-app 或 /tmp/chemistry-app.zip 後重跑本腳本"
+        exit 1
+    }
 fi
 
 # 安裝 Node.js 依賴

@@ -50,23 +50,31 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Session 設定
-app.use(session({
-    store: new pgSession({
-        pool: pool,
-        tableName: 'session',
-        createTableIfMissing: true
-    }),
+// Session 設定（dev 可使用記憶體模式，便於無 DB 預覽）
+const useMemorySession = (process.env.USE_MEMORY_SESSION || 'false').toLowerCase() === 'true';
+const sessionOptions = {
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
     resave: false,
     saveUninitialized: false,
     cookie: {
         maxAge: parseInt(process.env.SESSION_TIMEOUT) || 1800000, // 30 分鐘
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
     }
-}));
+};
+
+if (!useMemorySession) {
+    sessionOptions.store = new pgSession({
+        pool: pool,
+        tableName: 'session',
+        createTableIfMissing: true
+    });
+} else {
+    console.warn('⚠️ 正在使用記憶體 Session。僅供本機開發預覽使用，請勿在 Production 使用。');
+}
+
+app.use(session(sessionOptions));
 
 // 靜態檔案服務
 app.use(express.static(path.join(__dirname, 'public')));
