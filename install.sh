@@ -104,9 +104,30 @@ APP_PORT=${APP_PORT:-3000}
 # APT 以 IPv4 強制連線，避免 IPv6 網路不可達
 APT="apt-get -o Acquire::ForceIPv4=true"
 
-# 更新系統
+# 更新系統（含 HTTPS 鏡像自動回退）
 log_info "更新系統套件 (IPv4 模式)..."
+
+# 暫時關閉嚴格錯誤以便嘗試回退
+set +e
 $APT update
+APT_EXIT=$?
+if [ $APT_EXIT -ne 0 ]; then
+    log_warn "apt update 失敗，嘗試將來源改為 HTTPS 後重試..."
+    # 將主要來源改為 HTTPS
+    sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' /etc/apt/sources.list 2>/dev/null || true
+    # 將其他來源（若有）一併改為 HTTPS
+    if [ -d /etc/apt/sources.list.d ]; then
+        find /etc/apt/sources.list.d -name '*.list' -print0 2>/dev/null | xargs -0 -r sed -i 's|http://|https://|g'
+    fi
+    $APT update
+    APT_EXIT=$?
+    if [ $APT_EXIT -ne 0 ]; then
+        log_error "apt update 仍失敗，請檢查 Proxy/鏡像設定，或改走離線安裝。"
+        exit 1
+    fi
+fi
+set -e
+
 $APT upgrade -y
 
 # 安裝必要套件
