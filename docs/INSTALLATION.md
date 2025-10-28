@@ -67,6 +67,47 @@ docker-compose up -d
 
 ## 📝 手動安裝
 
+## 🌐 在公司/校園 Proxy 環境安裝
+
+若你的主機需要透過 Proxy 出網（常見於公司/學校網路），建議優先使用一鍵安裝腳本；腳本會詢問是否在 Proxy 環境並協助設定：
+
+- APT 代理（/etc/apt/apt.conf.d/01proxy）
+- 環境變數 http_proxy / https_proxy / (no_)NO_PROXY
+- npm 代理（npm config set proxy / https-proxy）
+- git 代理（git config --global http/https.proxy）
+- 選用：安裝公司自簽 CA 憑證（若 Proxy 做 TLS 檢查）
+
+你需要準備：
+- 代理 URL：例如 `http://user:pass@proxy.example.com:3128`
+- 例外名單 NO_PROXY（可留空）：例如 `localhost,127.0.0.1,::1`
+- 若公司有自簽根憑證，請取得 `.crt` 或 `.pem` 檔
+
+如需手動設定（不跑腳本或腳本先前版本）：
+
+```bash
+# 設定 APT 使用 Proxy
+echo 'Acquire::http::Proxy "http://user:pass@proxy.example.com:3128/";' | sudo tee /etc/apt/apt.conf.d/01proxy
+echo 'Acquire::https::Proxy "http://user:pass@proxy.example.com:3128/";' | sudo tee -a /etc/apt/apt.conf.d/01proxy
+
+# 臨時環境變數（當前 shell 有效）
+export http_proxy=http://user:pass@proxy.example.com:3128/
+export https_proxy=http://user:pass@proxy.example.com:3128/
+export NO_PROXY=localhost,127.0.0.1,::1
+
+# npm 與 git 代理
+npm config set proxy "$http_proxy"
+npm config set https-proxy "$https_proxy"
+git config --global http.proxy "$http_proxy"
+git config --global https.proxy "$https_proxy"
+
+# 安裝公司自簽 CA（若需）
+sudo install -m 0644 corp-rootCA.crt /usr/local/share/ca-certificates/corp-rootCA.crt
+sudo update-ca-certificates
+
+# 之後再執行 apt 更新與安裝
+sudo apt-get -o Acquire::ForceIPv4=true update
+```
+
 ### 步驟 1: 安裝系統套件
 
 #### Ubuntu/Debian

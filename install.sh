@@ -35,6 +35,42 @@ echo "🧪 化學品配方管理系統 - 安裝程式"
 echo "============================================"
 echo ""
 
+# Proxy 設定（公司/校園環境）
+read -p "是否在公司/校園 Proxy 環境 (y/N): " USE_PROXY
+USE_PROXY=${USE_PROXY:-N}
+
+PROXY_URL_ENV=${https_proxy:-${http_proxy}}
+if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
+    read -p "代理伺服器 URL (例如 http://user:pass@proxy.example.com:3128) [${PROXY_URL_ENV}]: " PROXY_URL
+    PROXY_URL=${PROXY_URL:-$PROXY_URL_ENV}
+    read -p "NO_PROXY 例外名單 (逗號分隔，可留空，例如: localhost,127.0.0.1,::1): " NO_PROXY
+
+    if [ -n "$PROXY_URL" ]; then
+        log_info "設定 APT 代理: $PROXY_URL"
+        cat > /etc/apt/apt.conf.d/01proxy <<EOF
+Acquire::http::Proxy "$PROXY_URL";
+Acquire::https::Proxy "$PROXY_URL";
+EOF
+
+        export http_proxy="$PROXY_URL"
+        export https_proxy="$PROXY_URL"
+        if [ -n "$NO_PROXY" ]; then
+            export no_proxy="$NO_PROXY"
+            export NO_PROXY="$NO_PROXY"
+        fi
+
+        # 選擇性：安裝公司自簽 CA 憑證以通過 HTTPS 檢查（若 Proxy 進行 TLS 檢查）
+        read -p "是否安裝公司自簽 CA 憑證 (輸入憑證檔路徑 .crt/.pem，留空略過): " PROXY_CA_PATH
+        if [ -n "$PROXY_CA_PATH" ] && [ -f "$PROXY_CA_PATH" ]; then
+            log_info "安裝自簽 CA 憑證: $PROXY_CA_PATH"
+            install -m 0644 "$PROXY_CA_PATH" /usr/local/share/ca-certificates/corp-proxy.crt
+            update-ca-certificates || true
+        fi
+    else
+        log_warn "未提供 Proxy URL，略過代理設定"
+    fi
+fi
+
 # 詢問安裝目錄
 read -p "安裝目錄 [/var/www/chemistry-app]: " INSTALL_DIR
 INSTALL_DIR=${INSTALL_DIR:-/var/www/chemistry-app}
@@ -86,6 +122,20 @@ fi
 
 log_info "Node.js 版本: $(node -v)"
 log_info "npm 版本: $(npm -v)"
+
+# 若設定了 Proxy，配置 npm 與 git 使用代理（僅影響目前系統）
+if [ -n "$PROXY_URL" ]; then
+    log_info "設定 npm 代理..."
+    npm config set proxy "$PROXY_URL" || true
+    npm config set https-proxy "$PROXY_URL" || true
+    if [ -n "$NO_PROXY" ]; then
+        npm config set noproxy "$NO_PROXY" || true
+    fi
+
+    log_info "設定 git 代理..."
+    git config --global http.proxy "$PROXY_URL" || true
+    git config --global https.proxy "$PROXY_URL" || true
+fi
 
 # 安裝 PostgreSQL
 log_info "安裝 PostgreSQL..."
