@@ -33,7 +33,26 @@ async function handleLogin(e) {
         if (response.ok) {
             app.currentUser = data.user;
             showNotification('登入成功', 'success');
-            showDashboard();
+
+            // 首次登入強制變更密碼
+            if (data.user.mustChangePassword) {
+                const newPwd = prompt('系統要求您首次登入必須更改密碼，請輸入新密碼 (至少 8 碼且含英文與數字)：');
+                if (newPwd) {
+                    changePassword('admin5612', newPwd).then((ok) => {
+                        if (ok) {
+                            showDashboard();
+                        } else {
+                            showNotification('請稍後於個人設定頁面變更密碼', 'error');
+                            showDashboard();
+                        }
+                    });
+                } else {
+                    showNotification('未變更密碼，請於右上角個人設定儘速變更', 'warning');
+                    showDashboard();
+                }
+            } else {
+                showDashboard();
+            }
         } else {
             errorDiv.textContent = data.error || '登入失敗';
             errorDiv.style.display = 'block';
