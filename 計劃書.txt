@@ -1,0 +1,411 @@
+# 化學品配方管理系統 - 專案規格書
+
+## 一、系統概述
+開發一個基於 Web 的化學品配方管理與計算系統,供實驗室學生與教師使用。
+
+## 二、技術架構
+
+### 2.1 伺服器環境
+- **Web Server**: Nginx
+- **作業系統**: Linux
+- **資料庫**: PostgreSQL
+- **建議後端**: Node.js (Express)
+- **建議前端**: HTML5、CSS3、JavaScript
+
+### 2.2 資料庫設計原則
+- 配方用 tags 陣列分類
+- 實驗數據用 JSONB 儲存彈性欄位
+- 檔案按年月分資料夾
+- 關鍵欄位建立索引（使用者、日期、標籤）
+- 使用分頁避免一次載入太多資料
+
+---
+
+## 三、核心功能需求
+
+### 3.1 配方計算與儲存功能
+
+#### 3.1.1 配方輸入介面
+使用者可輸入：
+- **目標總體積**（ml）
+- **化學品清單**，每個化學品包含：
+  - 化學品名稱
+  - 目標莫耳濃度（M）
+  - 原料濃度（%）
+  - 分子量/式量（MW/FW，g/mol）
+
+**範例**：
+```
+目標體積: 500 ml
+
+化學品 1: KOH
+- 目標濃度: 0.5 M
+- 原料濃度: 85%
+- 分子量: 56.11 g/mol
+
+化學品 2: 碳酸鉀
+- 目標濃度: 0.05 M
+- 原料濃度: 99%
+- 分子量: 138.21 g/mol
+
+化學品 3: 醋酸辛酯
+- 目標濃度: 0.01 M
+- 原料濃度: 100%
+- 分子量: 219.5 g/mol
+```
+
+#### 3.1.2 自動計算公式
+```
+所需質量(g) = (目標濃度 × 體積(L) × 分子量) / 原料濃度
+```
+
+#### 3.1.3 配方儲存與分類
+- 點擊「計算並保存」後：
+  1. 自動計算結果
+  2. 輸入配方名稱
+  3. **新增**：選擇標籤（tags）或類別（category）
+     - 例如：「電解液」、「緩衝液」、「有機溶劑」
+  4. 儲存至資料庫
+
+#### 3.1.4 配方檢視與搜尋
+- **列表頁**：顯示所有配方，支援分頁載入
+- **搜尋功能**：
+  - 依配方名稱
+  - 依化學品名稱
+  - 依標籤/類別
+  - 依創建者
+  - 依日期範圍
+- **配方詳情**：
+  - 完整配方資訊
+  - 各化學品所需質量
+  - 創建日期與創建者
+  - 相關標籤
+
+### 3.2 實驗數據上傳功能
+
+每個配方提供「上傳實驗數據」按鈕，可填寫：
+
+#### 3.2.1 實驗環境（JSONB 格式儲存）
+- 溫度（°C）
+- 濕度（%）
+- 實驗日期時間
+- 其他自訂欄位
+
+#### 3.2.2 實驗結果
+- 實驗結論（文字描述）
+- 觀察記錄
+- 成功評級（1-5 星）
+
+#### 3.2.3 數據與附件上傳
+- **支援格式**：
+  - 圖片：JPG、PNG、GIF、WEBP
+  - 數據：CSV、XLSX、TXT
+  - 文件：PDF
+- **限制**：
+  - 單檔最大 10 MB（圖片）、50 MB（數據）
+  - 每次實驗最多 20 個檔案
+- **自動處理**：
+  - UUID 檔名避免衝突
+  - 圖片自動壓縮
+  - 自動生成縮圖（300x300）
+  - 按年月分資料夾儲存
+
+### 3.3 使用者權限管理
+
+#### 3.3.1 權限表
+
+| 功能 | 管理員 | 一般使用者 |
+|------|--------|------------|
+| 創建/刪除帳號 | ✓ | ✗ |
+| 創建配方 | ✓ | ✓ |
+| 編輯自己的配方 | ✓ | ✓ |
+| 編輯他人配方 | ✓ | ✗ |
+| 刪除配方 | ✓ | 僅限自己的 |
+| 檢視公開配方 | ✓ | ✓ |
+| 變更自己密碼 | ✓ | ✓ |
+
+#### 3.3.2 預設管理員帳號
+```
+帳號: M1423013
+密碼: admin5612
+```
+**重要**：首次登入須強制變更密碼
+
+#### 3.3.3 密碼安全
+- 使用 bcrypt 或 Argon2 雜湊演算法
+- 密碼要求：至少 8 字元，含英文與數字
+- 登入失敗 5 次鎖定帳號 10 分鐘
+
+### 3.4 配方分享功能
+
+#### 3.4.1 公開設定
+- 創建配方時選擇「公開」或「私人」（**預設：私人**）
+- **私人配方**：僅創建者與管理員可見
+- **公開配方**：所有使用者可檢視，但不可編輯
+
+#### 3.4.2 編輯權限
+- 僅配方創建者或管理員可編輯
+- 編輯記錄自動記錄於操作日誌
+
+---
+
+## 四、資料庫結構
+
+### 4.1 核心資料表
+
+#### users（使用者表）
+```sql
+- id (PRIMARY KEY)
+- username (UNIQUE, 索引)
+- password_hash
+- role (admin/student, 索引)
+- email
+- full_name
+- is_active
+- failed_login_attempts
+- locked_until
+- created_at
+- last_login
+```
+
+#### formulas（配方表）
+```sql
+- id (PRIMARY KEY)
+- name
+- description
+- user_id (FOREIGN KEY, 索引)
+- total_volume
+- is_public (索引)
+- is_deleted (軟刪除, 索引)
+- tags (陣列, GIN 索引) -- 標籤分類
+- category -- 類別
+- deleted_at -- 刪除時間（僅標記，不自動清理）
+- created_at
+- updated_at
+```
+
+#### formula_ingredients（配方成分表）
+```sql
+- id (PRIMARY KEY)
+- formula_id (FOREIGN KEY, 索引)
+- chemical_name
+- target_concentration
+- raw_concentration
+- molecular_weight
+- calculated_mass
+- sequence_order
+- notes
+```
+
+#### experiments（實驗記錄表）
+```sql
+- id (PRIMARY KEY)
+- formula_id (FOREIGN KEY, 索引)
+- user_id (FOREIGN KEY, 索引)
+- experiment_date (索引)
+- title
+- environment (JSONB, GIN 索引) -- 彈性欄位
+- results (TEXT)
+- observations
+- conclusion
+- success_level (1-5)
+- numerical_data (JSONB) -- 數值資料
+- is_deleted
+- deleted_at -- 刪除時間（僅標記，不自動清理）
+- created_at
+- updated_at
+```
+
+#### experiment_attachments（實驗附件表）
+```sql
+- id (PRIMARY KEY)
+- experiment_id (FOREIGN KEY, 索引)
+- file_original_name
+- file_stored_name (UUID 格式)
+- file_path
+- file_type (image/data/document, 索引)
+- mime_type
+- file_size
+- thumbnail_path -- 縮圖路徑
+- description
+- is_deleted
+- deleted_at -- 刪除時間（僅標記，不自動清理）
+- uploaded_at
+```
+
+#### audit_logs（操作日誌表）
+```sql
+- id (PRIMARY KEY)
+- user_id (FOREIGN KEY, 索引)
+- action (create/update/delete/login)
+- entity_type (formula/experiment/user)
+- entity_id
+- old_value (JSONB)
+- new_value (JSONB)
+- ip_address
+- created_at (索引)
+```
+
+### 4.2 索引策略
+- 單欄索引：username, user_id, experiment_date, file_type
+- 複合索引：(user_id, experiment_date)
+- GIN 索引：tags（陣列）、environment（JSONB）
+
+---
+
+## 五、檔案儲存機制
+
+### 5.1 儲存架構
+```
+/var/www/chemistry-app/uploads/
+└── experiments/
+    ├── 2025/
+    │   ├── 01/
+    │   │   ├── original/
+    │   │   │   ├── {uuid}_{timestamp}.jpg
+    │   │   │   └── {uuid}_{timestamp}.csv
+    │   │   └── thumbnails/
+    │   │       └── {uuid}_{timestamp}_thumb.jpg
+    │   └── 02/
+    └── 2026/
+```
+
+### 5.2 檔案命名規則
+```
+格式: {UUID}_{timestamp}.{extension}
+範例: a1b2c3d4-e5f6-7890_20250128143022.jpg
+```
+
+### 5.3 檔案處理流程
+1. 檔案上傳
+2. 前端驗證（類型、大小）
+3. 後端驗證
+4. 生成 UUID 檔名
+5. 儲存檔案（按年月分類）
+6. 圖片自動壓縮（quality=85）
+7. 生成縮圖（300x300）
+8. 寫入資料庫記錄
+9. 返回檔案 ID
+
+### 5.4 軟刪除機制
+- 刪除時僅標記 `is_deleted = true` 及記錄 `deleted_at` 時間
+- **不自動清理**，保留所有歷史資料
+- 管理員可隨時恢復已刪除的配方、實驗或檔案
+- 管理員可手動永久刪除（需二次確認）
+
+---
+
+## 六、介面設計
+
+### 6.1 頁面架構
+1. 登入頁面
+2. 儀表板
+   - 我的配方列表（分頁顯示）
+   - 公開配方列表（分頁顯示）
+   - 搜尋與篩選功能
+3. 創建配方頁面（含標籤選擇）
+4. 配方詳情頁面
+5. 上傳實驗數據頁面
+6. 帳號管理頁面（管理員）
+7. 個人設定頁面（變更密碼）
+8. **已刪除項目管理頁面**（管理員專用）
+   - 檢視所有已刪除的配方、實驗、檔案
+   - 恢復或永久刪除功能
+
+### 6.2 使用者體驗
+- 響應式設計（桌面與平板）
+- 表單即時驗證
+- 操作成功/失敗提示
+- 搜尋自動補全建議
+- 縮圖預覽（圖片列表）
+- 分頁載入（每頁 20 筆）
+
+---
+
+## 七、安全性需求
+
+### 7.1 資料安全
+- 密碼使用 bcrypt/Argon2 雜湊
+- SQL Injection 防護（參數化查詢）
+- XSS 攻擊防護（輸入清理）
+- CSRF Token 驗證
+
+### 7.2 檔案安全
+- 檔案類型白名單驗證
+- 檔案大小限制
+- UUID 檔名防止猜測
+- 路徑遍歷攻擊防護
+
+### 7.3 傳輸安全
+- HTTPS 加密（建議）
+- Session 管理（30 分鐘無操作登出）
+
+---
+
+## 八、效能優化
+
+### 8.1 資料庫優化
+- 關鍵欄位建立索引
+- 使用分頁查詢（每頁 20 筆）
+- 複雜查詢使用快取（Redis，選配）
+
+### 8.2 檔案優化
+- 圖片自動壓縮（節省空間）
+- 縮圖生成（加快載入）
+- 列表頁優先顯示縮圖
+
+---
+
+## 九、備份與維護
+
+### 9.1 自動備份
+```bash
+# 每日資料庫備份（保留 30 天）
+pg_dump chemistry_db | gzip > backup_$(date +%Y%m%d).sql.gz
+
+# 每週完整備份（含檔案）
+tar -czf full_backup_$(date +%Y%m%d).tar.gz /var/www/chemistry-app
+```
+
+### 9.2 定期維護
+- 監控磁碟空間（低於 20% 警告）
+- 定期檢查資料庫效能
+- 管理員定期檢視已刪除項目，決定是否永久刪除
+
+---
+
+## 十、部署需求
+
+### 10.1 系統需求
+- Linux (Ubuntu 20.04+)
+- PostgreSQL 13+
+- Nginx 1.18+
+- Node.js 16+
+
+### 10.2 交付內容
+1. 完整原始碼與註解
+2. 資料庫建置腳本（含索引）
+3. Nginx 設定檔
+4. 部署說明文件
+5. 使用者手冊
+6. 管理員手冊
+
+---
+
+## 十一、關鍵技術總結
+
+**資料庫選型**：PostgreSQL（不用 SQLite）
+
+**資料組織**：
+- 配方用 tags 陣列分類
+- 實驗數據用 JSONB 儲存彈性欄位
+- 檔案按年月分資料夾
+
+**查詢優化**：
+- 關鍵欄位建索引（使用者、日期、標籤）
+- 使用分頁避免一次載入太多資料
+
+**檔案處理**：
+- UUID 檔名避免衝突
+- 圖片自動壓縮 + 生成縮圖
+- 軟刪除機制（僅標記，不自動清理，管理員可手動處理）
