@@ -89,7 +89,11 @@ router.get('/',
         queryValidator('search').optional().trim(),
         queryValidator('tags').optional(),
         queryValidator('category').optional().trim(),
-        queryValidator('publicOnly').optional().isBoolean()
+        queryValidator('publicOnly').optional().isBoolean(),
+        queryValidator('creator').optional().trim(),
+        queryValidator('startDate').optional().isISO8601(),
+        queryValidator('endDate').optional().isISO8601(),
+        queryValidator('chemical').optional().trim()
     ],
     async (req, res) => {
         try {
@@ -100,6 +104,10 @@ router.get('/',
             const tags = req.query.tags ? req.query.tags.split(',') : null;
             const category = req.query.category || null;
             const publicOnly = req.query.publicOnly === 'true';
+            const creator = req.query.creator || null;
+            const startDate = req.query.startDate || null;
+            const endDate = req.query.endDate || null;
+            const chemical = req.query.chemical || null;
             const userId = req.session.userId;
             const isAdmin = req.session.role === 'admin';
 
@@ -117,7 +125,7 @@ router.get('/',
                 paramIndex++;
             }
 
-            // 搜尋過濾
+            // 搜尋過濾 (名稱/描述)
             if (search) {
                 whereConditions.push(`(f.name ILIKE $${paramIndex} OR f.description ILIKE $${paramIndex})`);
                 params.push(`%${search}%`);
@@ -138,6 +146,34 @@ router.get('/',
                 paramIndex++;
             }
 
+            // 建立者過濾 (username)
+            if (creator) {
+                whereConditions.push(`u.username = $${paramIndex}`);
+                params.push(creator);
+                paramIndex++;
+            }
+
+            // 日期範圍 (created_at)
+            if (startDate) {
+                whereConditions.push(`f.created_at >= $${paramIndex}`);
+                params.push(startDate);
+                paramIndex++;
+            }
+            if (endDate) {
+                whereConditions.push(`f.created_at <= $${paramIndex}`);
+                params.push(endDate);
+                paramIndex++;
+            }
+
+            // 依化學品名稱過濾
+            let chemicalJoin = '';
+            if (chemical) {
+                chemicalJoin = 'LEFT JOIN formula_ingredients fi ON fi.formula_id = f.id';
+                whereConditions.push(`fi.chemical_name ILIKE $${paramIndex}`);
+                params.push(`%${chemical}%`);
+                paramIndex++;
+            }
+
             const whereClause = whereConditions.join(' AND ');
 
             // 取得總數
@@ -155,6 +191,7 @@ router.get('/',
                     COUNT(DISTINCT e.id) as experiment_count
                  FROM formulas f
                  JOIN users u ON f.user_id = u.id
+                 ${chemicalJoin}
                  LEFT JOIN experiments e ON f.id = e.formula_id AND e.is_deleted = false
                  WHERE ${whereClause}
                  GROUP BY f.id, u.username, u.full_name

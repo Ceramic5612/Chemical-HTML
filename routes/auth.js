@@ -109,7 +109,8 @@ router.post('/login', loginValidation, async (req, res) => {
                 username: user.username,
                 role: user.role,
                 fullName: user.full_name,
-                email: user.email
+                email: user.email,
+                mustChangePassword: !!user.must_change_password
             }
         });
 
@@ -204,9 +205,9 @@ router.post('/change-password',
             const rounds = parseInt(process.env.BCRYPT_ROUNDS) || 10;
             const newPasswordHash = await bcrypt.hash(newPassword, rounds);
 
-            // 更新密碼
+            // 更新密碼並取消強制變更旗標
             await query(
-                'UPDATE users SET password_hash = $1 WHERE id = $2',
+                'UPDATE users SET password_hash = $1, must_change_password = false WHERE id = $2',
                 [newPasswordHash, req.session.userId]
             );
 

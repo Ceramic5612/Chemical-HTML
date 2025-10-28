@@ -6,6 +6,8 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
+const cookieParser = require('cookie-parser');
+const csrf = require('csurf');
 require('dotenv').config();
 
 const { pool } = require('./config/database');
@@ -46,6 +48,7 @@ const loginLimiter = rateLimit({
 // Body 解析
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
 // Session 設定
 app.use(session({
@@ -83,6 +86,16 @@ if (!fs.existsSync(uploadDir)) {
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// 在生產環境開啟 CSRF 防護，提供 token 取得端點
+let csrfProtection = (req, res, next) => next();
+if ((process.env.NODE_ENV || 'development') === 'production') {
+    csrfProtection = csrf({ cookie: true });
+    app.use('/api', csrfProtection);
+    app.get('/api/csrf-token', (req, res) => {
+        res.json({ csrfToken: req.csrfToken() });
+    });
+}
 
 // API 路由
 app.use('/api/auth', loginLimiter, require('./routes/auth'));
