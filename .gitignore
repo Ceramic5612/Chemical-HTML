@@ -16,8 +16,8 @@ uploads/
 logs/
 *.log
 
-# Database
-*.sql
+# Database backups (排除備份檔，但保留 schema)
+backup_*.sql
 *.db
 
 # OS
