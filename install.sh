@@ -193,8 +193,17 @@ elif [ -f "/tmp/chemistry-app.zip" ]; then
     # 若 zip 內層有目錄，嘗試抓第一層目錄內容
     if [ -d "/tmp/chemistry-app-unzip/Chemical-HTML-main" ]; then
         cp -r /tmp/chemistry-app-unzip/Chemical-HTML-main/* $INSTALL_DIR/
+    elif [ -d "/tmp/chemistry-app-unzip/chemistry-app" ]; then
+        cp -r /tmp/chemistry-app-unzip/chemistry-app/* $INSTALL_DIR/
     else
-        cp -r /tmp/chemistry-app-unzip/* $INSTALL_DIR/
+        # 找第一個含 package.json 的子目錄
+        FIRST_DIR=$(find /tmp/chemistry-app-unzip -mindepth 1 -maxdepth 1 -type d -exec test -f {}/package.json \; -print -quit)
+        if [ -n "$FIRST_DIR" ]; then
+            log_info "偵測到專案目錄: $FIRST_DIR"
+            cp -r "$FIRST_DIR"/* $INSTALL_DIR/
+        else
+            cp -r /tmp/chemistry-app-unzip/* $INSTALL_DIR/
+        fi
     fi
 else
     log_info "從 GitHub 下載專案..."
@@ -203,6 +212,37 @@ else
         exit 1
     }
 fi
+
+# 驗證關鍵檔案是否存在
+log_info "驗證專案檔案完整性..."
+REQUIRED_FILES=(
+    "package.json"
+    "server.js"
+    "database/schema.sql"
+    "scripts/init-database.js"
+)
+
+MISSING_FILES=()
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ ! -f "$INSTALL_DIR/$file" ]; then
+        MISSING_FILES+=("$file")
+    fi
+done
+
+if [ ${#MISSING_FILES[@]} -gt 0 ]; then
+    log_error "專案檔案不完整，缺少以下檔案:"
+    for file in "${MISSING_FILES[@]}"; do
+        echo "  - $file"
+    done
+    log_error "請確認:"
+    log_error "  1. 若使用 git clone: 確認網路暢通且完整下載"
+    log_error "  2. 若使用 zip: 確認壓縮檔完整且解壓後目錄結構正確"
+    log_error "  3. 目前安裝目錄內容:"
+    ls -la $INSTALL_DIR | head -20
+    exit 1
+fi
+
+log_info "✓ 專案檔案完整"
 
 # 安裝 Node.js 依賴
 log_info "安裝 Node.js 依賴套件..."
