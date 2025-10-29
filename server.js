@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
-const csrf = require('csurf');
+const { doubleCsrf } = require('csrf-csrf');
 require('dotenv').config();
 
 const { pool } = require('./config/database');
@@ -95,15 +95,36 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 在生產環境開啟 CSRF 防護，提供 token 取得端點
+// CSRF 防護設定（生產環境）
 let csrfProtection = (req, res, next) => next();
+let generateToken = (req, res) => res.json({ csrfToken: 'dev-mode-no-csrf' });
+
 if ((process.env.NODE_ENV || 'development') === 'production') {
-    csrfProtection = csrf({ cookie: true });
-    app.use('/api', csrfProtection);
-    app.get('/api/csrf-token', (req, res) => {
-        res.json({ csrfToken: req.csrfToken() });
+    const {
+        generateToken: genToken,
+        doubleCsrfProtection,
+    } = doubleCsrf({
+        getSecret: () => process.env.SESSION_SECRET || 'your-secret-key-change-this',
+        cookieName: 'x-csrf-token',
+        cookieOptions: {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: true,
+        },
+        size: 64,
+        ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
     });
+    
+    csrfProtection = doubleCsrfProtection;
+    generateToken = (req, res) => {
+        const token = genToken(req, res);
+        res.json({ csrfToken: token });
+    };
+    
+    app.use('/api', csrfProtection);
 }
+
+app.get('/api/csrf-token', generateToken);
 
 // API 路由
 app.use('/api/auth', loginLimiter, require('./routes/auth'));

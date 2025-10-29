@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 資料庫
+  postgres:
+    image: postgres:15-alpine
+    container_name: chemistry-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-chemistry_db}
+      POSTGRES_USER: ${DB_USER:-chemistry_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chemistry_user} -d ${DB_NAME:-chemistry_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chemistry-network
+
+  # Node.js 應用程式
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chemistry-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-chemistry_db}
+      DB_USER: ${DB_USER:-chemistry_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      UPLOAD_PATH: /app/uploads
+      MAX_FILE_SIZE_IMAGE: 10485760
+      MAX_FILE_SIZE_DATA: 52428800
+      MAX_FILES_PER_EXPERIMENT: 20
+      BCRYPT_ROUNDS: 10
+      SESSION_TIMEOUT: 1800000
+      MAX_LOGIN_ATTEMPTS: 5
+      LOCK_TIME: 600000
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chemistry-network
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: chemistry-nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
+      - uploads_data:/app/uploads:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - chemistry-network
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  chemistry-network:
+    driver: bridge

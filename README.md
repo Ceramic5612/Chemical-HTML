@@ -14,7 +14,24 @@
 
 ## 🚀 快速安裝
 
-### 一鍵安裝 (Ubuntu 20.04+)
+### 方式一：Docker 部署（推薦）
+
+```bash
+# 克隆專案
+git clone https://github.com/Ceramic5612/Chemical-HTML.git
+cd Chemical-HTML
+
+# 設定環境變數
+cp .env.docker .env
+nano .env  # 修改 DB_PASSWORD 和 SESSION_SECRET
+
+# 啟動服務
+docker-compose up -d
+```
+
+詳見 [Docker 部署指南](docs/DOCKER.md)
+
+### 方式二：一鍵安裝 (Ubuntu 20.04+)
 
 ```bash
 # 下載安裝腳本
@@ -24,12 +41,13 @@ wget https://raw.githubusercontent.com/Ceramic5612/Chemical-HTML/main/install.sh
 sudo bash install.sh
 ```
 
-### 手動安裝
+### 方式三：手動安裝
 
 請參閱 [安裝指南](docs/INSTALLATION.md)
 
 ## 📖 文件
 
+- [Docker 部署指南](docs/DOCKER.md) - 容器化部署說明（推薦）
 - [安裝指南](docs/INSTALLATION.md) - 完整的安裝步驟
 - [使用者手冊](docs/USER_MANUAL.md) - 系統使用說明
 - [管理員手冊](docs/ADMIN_MANUAL.md) - 管理功能說明

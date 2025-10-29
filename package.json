@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "init-db": "node scripts/init-database.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
   },
   "keywords": ["chemistry", "formula", "management", "laboratory"],
   "author": "",
@@ -18,7 +19,7 @@
     "bcryptjs": "^2.4.3",
     "express-session": "^1.17.3",
     "express-validator": "^7.0.1",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.0.0-rc.4",
     "sharp": "^0.33.2",
     "uuid": "^9.0.1",
     "dotenv": "^16.3.1",
@@ -27,9 +28,11 @@
     "express-rate-limit": "^7.1.5",
     "connect-pg-simple": "^9.0.1",
     "cookie-parser": "^1.4.6",
-    "csurf": "^1.11.0"
+    "csrf-csrf": "^3.0.4"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
   }
 }

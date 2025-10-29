@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# 環境變數
+.env
+.env.local
+.env.*.local
+
+# 上傳檔案
+uploads/*
+!uploads/.gitkeep
+
+# 日誌
+*.log
+logs
+
+# 作業系統
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 測試
+coverage
+.nyc_output
+
+# 文件（保留在 repo，Docker 不需要）
+docs/*.md
+*.md
+!README.md
+
+# 腳本（Docker 環境不需要）
+install.sh
+push-to-github.ps1
+GIT_PUSH_GUIDE.md
+計劃書.txt
+
+# 備份腳本（主機環境用）
+scripts/backup-*.sh
+
+# 開發工具
+nodemon.json
