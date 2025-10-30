@@ -101,6 +101,10 @@ fi
 read -p "應用程式連接埠 [3000]: " APP_PORT
 APP_PORT=${APP_PORT:-3000}
 
+# 詢問進程管理器
+read -p "使用 PM2 進程管理器？(推薦) (Y/n): " USE_PM2
+USE_PM2=${USE_PM2:-Y}
+
 # APT 以 IPv4 強制連線，避免 IPv6 網路不可達
 APT="apt-get -o Acquire::ForceIPv4=true"
 
@@ -302,9 +306,70 @@ log_info "初始化資料庫架構..."
 DB_HOST=localhost DB_PORT=5432 DB_NAME=$DB_NAME DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD \
     node scripts/init-database.js
 
-# 建立 systemd 服務
-log_info "建立 systemd 服務..."
-cat > /etc/systemd/system/chemistry-app.service <<EOF
+# 設定檔案權限
+log_info "設定檔案權限..."
+chown -R www-data:www-data $INSTALL_DIR
+chmod -R 755 $INSTALL_DIR
+chmod 600 $INSTALL_DIR/.env
+
+# 選擇進程管理器
+if [[ "$USE_PM2" =~ ^[Yy]$ ]]; then
+    log_info "安裝並設定 PM2..."
+    
+    # 全域安裝 PM2
+    npm install -g pm2
+    
+    # 建立 PM2 設定檔
+    cat > $INSTALL_DIR/ecosystem.config.js <<'PMEOF'
+module.exports = {
+  apps: [{
+    name: 'chemistry-app',
+    script: './server.js',
+    instances: 'max',
+    exec_mode: 'cluster',
+    env: {
+      NODE_ENV: 'production'
+    },
+    error_file: './logs/pm2-error.log',
+    out_file: './logs/pm2-out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    merge_logs: true,
+    autorestart: true,
+    max_restarts: 10,
+    min_uptime: '10s',
+    max_memory_restart: '500M',
+    watch: false
+  }]
+};
+PMEOF
+    
+    # 建立日誌目錄
+    mkdir -p $INSTALL_DIR/logs
+    chown -R www-data:www-data $INSTALL_DIR/logs
+    
+    # 以 www-data 使用者啟動 PM2
+    log_info "啟動 PM2 應用程式..."
+    sudo -u www-data bash -c "cd $INSTALL_DIR && pm2 start ecosystem.config.js"
+    
+    # 儲存 PM2 進程列表
+    sudo -u www-data pm2 save
+    
+    # 設定 PM2 開機自動啟動
+    env PATH=$PATH:/usr/bin pm2 startup systemd -u www-data --hp /var/www
+    
+    log_info "✓ PM2 設定完成"
+    
+    PM2_COMMANDS="PM2 管理指令:
+  啟動: sudo -u www-data pm2 start chemistry-app
+  停止: sudo -u www-data pm2 stop chemistry-app
+  重啟: sudo -u www-data pm2 restart chemistry-app
+  狀態: sudo -u www-data pm2 status
+  日誌: sudo -u www-data pm2 logs chemistry-app
+  監控: sudo -u www-data pm2 monit"
+    
+else
+    log_info "建立 systemd 服務..."
+    cat > /etc/systemd/system/chemistry-app.service <<EOF
 [Unit]
 Description=Chemistry Formula Management System
 After=network.target postgresql.service
@@ -321,12 +386,30 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-
-# 設定檔案權限
-log_info "設定檔案權限..."
-chown -R www-data:www-data $INSTALL_DIR
-chmod -R 755 $INSTALL_DIR
-chmod 600 $INSTALL_DIR/.env
+    
+    # 啟動服務
+    log_info "啟動應用程式服務..."
+    systemctl daemon-reload
+    systemctl start chemistry-app
+    systemctl enable chemistry-app
+    
+    # 檢查服務狀態
+    sleep 3
+    if systemctl is-active --quiet chemistry-app; then
+        log_info "✓ 服務啟動成功"
+    else
+        log_error "✗ 服務啟動失敗"
+        systemctl status chemistry-app
+        exit 1
+    fi
+    
+    PM2_COMMANDS="Systemd 管理指令:
+  啟動: sudo systemctl start chemistry-app
+  停止: sudo systemctl stop chemistry-app
+  重啟: sudo systemctl restart chemistry-app
+  狀態: sudo systemctl status chemistry-app
+  日誌: sudo journalctl -u chemistry-app -f"
+fi
 
 # 設定 Nginx
 log_info "設定 Nginx..."
@@ -367,22 +450,6 @@ nginx -t
 # 重新載入 Nginx
 systemctl reload nginx
 
-# 啟動服務
-log_info "啟動應用程式服務..."
-systemctl daemon-reload
-systemctl start chemistry-app
-systemctl enable chemistry-app
-
-# 檢查服務狀態
-sleep 3
-if systemctl is-active --quiet chemistry-app; then
-    log_info "✓ 服務啟動成功"
-else
-    log_error "✗ 服務啟動失敗"
-    systemctl status chemistry-app
-    exit 1
-fi
-
 # 設定防火牆 (如果安裝了 ufw)
 if command -v ufw &> /dev/null; then
     log_info "設定防火牆..."
@@ -411,12 +478,7 @@ echo "  使用者名稱: M1423013"
 echo "  密碼: admin5612"
 echo "  ⚠️  請在首次登入後立即變更密碼！"
 echo ""
-echo "服務管理指令:"
-echo "  啟動: sudo systemctl start chemistry-app"
-echo "  停止: sudo systemctl stop chemistry-app"
-echo "  重啟: sudo systemctl restart chemistry-app"
-echo "  狀態: sudo systemctl status chemistry-app"
-echo "  日誌: sudo journalctl -u chemistry-app -f"
+echo "$PM2_COMMANDS"
 echo ""
 echo "資料庫備份指令:"
 echo "  sudo -u postgres pg_dump $DB_NAME > backup.sql"

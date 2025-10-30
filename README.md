@@ -48,6 +48,7 @@ sudo bash install.sh
 ## 📖 文件
 
 - [Docker 部署指南](docs/DOCKER.md) - 容器化部署說明（推薦）
+- [PM2 進程管理指南](docs/PM2.md) - PM2 叢集模式與監控
 - [安裝指南](docs/INSTALLATION.md) - 完整的安裝步驟
 - [使用者手冊](docs/USER_MANUAL.md) - 系統使用說明
 - [管理員手冊](docs/ADMIN_MANUAL.md) - 管理功能說明
@@ -59,6 +60,7 @@ sudo bash install.sh
 - **資料庫**: PostgreSQL 13+
 - **Web Server**: Nginx
 - **前端**: HTML5 + CSS3 + JavaScript (原生)
+- **進程管理**: PM2 (叢集模式) 或 Systemd
 
 ## 📋 系統需求
 
