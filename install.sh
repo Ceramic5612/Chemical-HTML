@@ -319,6 +319,11 @@ if [[ "$USE_PM2" =~ ^[Yy]$ ]]; then
     # 全域安裝 PM2
     npm install -g pm2
     
+    # 建立 PM2 主目錄並設定權限
+    log_info "建立 PM2 主目錄..."
+    mkdir -p /var/www/.pm2
+    chown -R www-data:www-data /var/www/.pm2
+    
     # 建立 PM2 設定檔
     cat > $INSTALL_DIR/ecosystem.config.js <<'PMEOF'
 module.exports = {
@@ -352,10 +357,23 @@ PMEOF
     sudo -u www-data bash -c "cd $INSTALL_DIR && pm2 start ecosystem.config.js"
     
     # 儲存 PM2 進程列表
+    log_info "儲存 PM2 進程列表..."
     sudo -u www-data pm2 save
     
     # 設定 PM2 開機自動啟動
+    log_info "設定 PM2 開機自動啟動..."
     env PATH=$PATH:/usr/bin pm2 startup systemd -u www-data --hp /var/www
+    
+    # 等待服務啟動
+    sleep 3
+    
+    # 檢查 PM2 狀態
+    log_info "檢查 PM2 狀態..."
+    if sudo -u www-data pm2 list | grep -q "online"; then
+        log_info "✓ PM2 服務啟動成功"
+    else
+        log_warn "PM2 可能未正確啟動,請手動檢查: sudo -u www-data pm2 status"
+    fi
     
     log_info "✓ PM2 設定完成"
     
@@ -363,9 +381,10 @@ PMEOF
   啟動: sudo -u www-data pm2 start chemistry-app
   停止: sudo -u www-data pm2 stop chemistry-app
   重啟: sudo -u www-data pm2 restart chemistry-app
+  重新載入(零停機): sudo -u www-data pm2 reload chemistry-app
   狀態: sudo -u www-data pm2 status
   日誌: sudo -u www-data pm2 logs chemistry-app
-  監控: sudo -u www-data pm2 monit"
+  即時監控: sudo -u www-data pm2 monit"
     
 else
     log_info "建立 systemd 服務..."
