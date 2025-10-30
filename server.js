@@ -14,6 +14,12 @@ const { pool } = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+// 在反向代理後面時需要信任 proxy（例如 Nginx），以便正確判斷 req.secure 等
+app.set('trust proxy', 1);
+
+// 根據環境變數決定是否使用安全 Cookie 以及是否啟用 CSRF
+const COOKIE_SECURE = (process.env.COOKIE_SECURE || 'false').toLowerCase() === 'true';
+const ENABLE_CSRF = (process.env.ENABLE_CSRF || 'false').toLowerCase() === 'true';
 
 // ============================================
 // 中介軟體設定
@@ -22,6 +28,9 @@ const PORT = process.env.PORT || 3000;
 // 安全性標頭
 app.use(helmet({
     contentSecurityPolicy: false, // 允許內聯樣式和腳本
+    // 在非 HTTPS 環境下關閉以下標頭，避免瀏覽器噪音與相容性問題
+    crossOriginOpenerPolicy: COOKIE_SECURE ? { policy: 'same-origin' } : false,
+    originAgentCluster: COOKIE_SECURE ? true : false,
 }));
 
 // CORS 設定
@@ -59,7 +68,8 @@ const sessionOptions = {
     cookie: {
         maxAge: parseInt(process.env.SESSION_TIMEOUT) || 1800000, // 30 分鐘
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        // 依環境變數控制 Secure 屬性；若未設定且在 HTTP 上，避免丟失 Cookie
+        secure: COOKIE_SECURE,
         sameSite: 'lax'
     }
 };
@@ -95,11 +105,11 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// CSRF 防護設定（生產環境）
+// CSRF 防護設定（生產環境 + 顯式啟用時）
 let csrfProtection = (req, res, next) => next();
 let generateToken = (req, res) => res.json({ csrfToken: 'dev-mode-no-csrf' });
 
-if ((process.env.NODE_ENV || 'development') === 'production') {
+if ((process.env.NODE_ENV || 'development') === 'production' && ENABLE_CSRF) {
     const {
         generateToken: genToken,
         doubleCsrfProtection,
@@ -109,7 +119,8 @@ if ((process.env.NODE_ENV || 'development') === 'production') {
         cookieOptions: {
             httpOnly: true,
             sameSite: 'lax',
-            secure: true,
+            // 與 Session 設定一致
+            secure: COOKIE_SECURE,
         },
         size: 64,
         ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
@@ -121,7 +132,8 @@ if ((process.env.NODE_ENV || 'development') === 'production') {
         res.json({ csrfToken: token });
     };
     
-    app.use('/api', csrfProtection);
+    // 僅對變更狀態的路由套用 CSRF，並排除登入/登出等認證端點，避免前端尚未攜帶 Token 時被阻擋
+    app.use(['/api/formulas', '/api/experiments', '/api/users', '/api/admin', '/api/uploads'], csrfProtection);
 }
 
 app.get('/api/csrf-token', generateToken);
