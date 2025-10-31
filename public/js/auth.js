@@ -36,19 +36,54 @@ async function handleLogin(e) {
 
             // 首次登入強制變更密碼
             if (data.user.mustChangePassword) {
-                const newPwd = prompt('系統要求您首次登入必須更改密碼，請輸入新密碼 (至少 8 碼且含英文與數字)：');
-                if (newPwd) {
-                    changePassword('admin5612', newPwd).then((ok) => {
-                        if (ok) {
-                            showDashboard();
-                        } else {
-                            showNotification('請稍後於個人設定頁面變更密碼', 'error');
-                            showDashboard();
+                // 使用 SweetAlert2 顯示漂亮的必改密碼對話框
+                if (window.Swal) {
+                    Swal.fire({
+                        title: '首次登入需變更密碼',
+                        text: '請輸入新密碼（至少 8 碼，需含英文與數字）',
+                        input: 'password',
+                        inputAttributes: {
+                            minlength: 8,
+                            autocapitalize: 'off',
+                            autocorrect: 'off'
+                        },
+                        inputValidator: (value) => {
+                            if (!value) return '請輸入新密碼';
+                            if (value.length < 8) return '至少 8 碼';
+                            if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) return '需包含英文字母與數字';
+                        },
+                        confirmButtonText: '變更密碼',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showCancelButton: false
+                    }).then((result) => {
+                        if (result.isConfirmed && result.value) {
+                            changePassword('admin5612', result.value).then((ok) => {
+                                if (ok) {
+                                    showDashboard();
+                                } else {
+                                    showNotification('請稍後於個人設定頁面變更密碼', 'error');
+                                    showDashboard();
+                                }
+                            });
                         }
                     });
                 } else {
-                    showNotification('未變更密碼，請於右上角個人設定儘速變更', 'warning');
-                    showDashboard();
+                    // 備援方案
+                    const newPwd = prompt('系統要求您首次登入必須更改密碼，請輸入新密碼 (至少 8 碼且含英文與數字)：');
+                    if (newPwd) {
+                        changePassword('admin5612', newPwd).then((ok) => {
+                            if (ok) {
+                                showDashboard();
+                            } else {
+                                showNotification('請稍後於個人設定頁面變更密碼', 'error');
+                                showDashboard();
+                            }
+                        });
+                    } else {
+                        showNotification('未變更密碼，請於右上角個人設定儘速變更', 'warning');
+                        showDashboard();
+                    }
                 }
             } else {
                 showDashboard();

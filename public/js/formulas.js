@@ -1,5 +1,45 @@
 // 配方管理相關功能
 
+// 初始化建立配方頁面（註冊送出事件）
+function initCreateFormulaPage() {
+    const form = document.getElementById('create-formula-form');
+    if (!form) return;
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('cf-name').value.trim();
+        const description = document.getElementById('cf-desc').value.trim();
+        const total_volume = parseFloat(document.getElementById('cf-volume').value);
+        const tagsRaw = document.getElementById('cf-tags').value.trim();
+        const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+        if (!name || !total_volume || total_volume <= 0) {
+            showNotification('請確認名稱與體積', 'warning');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/formulas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name, description, total_volume, tags })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showNotification('已建立配方', 'success');
+                navigateTo('formulas');
+                // 重新載入我的配方
+                await loadMyFormulas();
+            } else {
+                showNotification(data.error || '建立失敗', 'error');
+            }
+        } catch (err) {
+            console.error('建立配方失敗:', err);
+            showNotification('建立配方失敗', 'error');
+        }
+    };
+}
+
 // 載入我的配方
 async function loadMyFormulas() {
     try {

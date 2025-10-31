@@ -86,6 +86,11 @@ async function loadPageData(page) {
         case 'public-formulas':
             await loadPublicFormulas();
             break;
+        case 'create-formula':
+            if (typeof initCreateFormulaPage === 'function') {
+                initCreateFormulaPage();
+            }
+            break;
         case 'admin':
             if (app.currentUser.role === 'admin') {
                 await loadAdminData();
@@ -172,14 +177,24 @@ function displayRecentFormulas(formulas) {
 
 // 顯示通知
 function showNotification(message, type = 'success') {
-    const notification = document.getElementById('notification');
-    notification.textContent = message;
-    notification.className = `notification ${type}`;
-    notification.style.display = 'block';
-    
-    setTimeout(() => {
-        notification.style.display = 'none';
-    }, 3000);
+    const icon = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'success';
+    if (window.Swal) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon,
+            title: message,
+            showConfirmButton: false,
+            timer: 2200,
+            timerProgressBar: true
+        });
+    } else {
+        const notification = document.getElementById('notification');
+        notification.textContent = message;
+        notification.className = `notification ${type}`;
+        notification.style.display = 'block';
+        setTimeout(() => { notification.style.display = 'none'; }, 3000);
+    }
 }
 
 // HTML 轉義
